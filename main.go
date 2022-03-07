@@ -1,13 +1,12 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"log"
-	"os"
 	"strconv"
 
 	"github.com/jacobsa/go-serial/serial"
+	"github.com/jessevdk/go-flags"
 	s "go.bug.st/serial.v1"
 )
 
@@ -17,17 +16,17 @@ func check(err error) {
 	}
 }
 
-func getFirstPort() (string, error) {
+func getFirstPort() (*string, error) {
 	ports, err := s.GetPortsList()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	if len(ports) == 0 {
-		return "", errors.New("no ports found")
+		return nil, nil
 	}
 
-	return ports[0], nil
+	return &ports[0], nil
 }
 
 func getBaudOrDefault(input string) uint {
@@ -48,38 +47,43 @@ func getBaudOrDefault(input string) uint {
 	return uint(baud)
 }
 
-func main() {
-	args := os.Args[1:]
-	var err error
-	var port string
-	var baud uint
+type Opts struct {
+	Port     *string `short:"p" long:"port" description:"serial port to use" default-mask:"first available port"`
+	Baud     *uint   `short:"b" long:"baud" description:"baud rate to use" default:"115200"`
+	DataBits *uint   `short:"d" long:"databits" description:"data bits to use" default:"8"`
+	StopBits *uint   `short:"s" long:"stopbits" description:"stop bits to use" default:"1"`
+}
 
-	switch len(args) {
-	case 0:
-		port, err = getFirstPort()
+func main() {
+	var opts Opts
+	if _, err := flags.Parse(&opts); err != nil {
+		log.Fatal(err)
+	}
+
+	var err error
+
+	if opts.Port == nil {
+		p, err := getFirstPort()
 		if err != nil {
 			log.Fatalf("error getting port: %v", err)
 			return
 		}
 
-		baud = 115200
-	case 1:
-		port = args[0]
-		baud = 115200
-	case 2:
-		port = args[0]
-		baud = getBaudOrDefault(args[1])
-	default:
-		log.Fatalln("incorrect number of args")
-		return
+		if p == nil {
+			log.Fatal("No available serial ports were detected")
+			return
+		}
+
+		opts.Port = p
 	}
 
+
 	options := serial.OpenOptions{
-		PortName:        port,
-		BaudRate:        baud,
-		DataBits:        8,
-		StopBits:        1,
-		MinimumReadSize: 4,
+		PortName:        *opts.Port,
+		BaudRate:        *opts.Baud,
+		DataBits:        *opts.DataBits,
+		StopBits:        *opts.StopBits,
+		MinimumReadSize: 1,
 	}
 	conn, err := serial.Open(options)
 	if err != nil {
@@ -87,6 +91,8 @@ func main() {
 		return
 	}
 	defer conn.Close()
+
+	fmt.Println("Reading serial port", *opts.Port)
 
 	var buf []byte
 

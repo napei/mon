@@ -27,4 +27,5 @@ jobs:
           goarch: ${{ matrix.goarch }}
           goversion: "1.17"
           binary_name: "mon"
+          md5sum: FALSE
           extra_files: LICENSE README.md
